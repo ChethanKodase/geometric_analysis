@@ -33,15 +33,11 @@ cd alma
 conda activate dt2
 python diffae/autoencoding_attack_grad_image.py --desired_norm_l_inf 0.27 --attck_type gcr_cos --which_gpu 4 --diffae_checkpoint ../diffae/checkpoints --ffhq_images_directory ../diffae/imgs_align_uni_ad --chosen_space_ind 16
 
-
-
 cd alma
 conda activate dt2
 python diffae/autoencoding_attack_grad_image.py --desired_norm_l_inf 0.27 --attck_type gcr_cos --which_gpu 6 --diffae_checkpoint ../diffae/checkpoints --ffhq_images_directory ../diffae/imgs_align_uni_ad --chosen_space_ind 15
 
-
-
-cd alma
+cd geometric_analysis
 conda activate dt2
 python diffae/autoencoding_attack_grad_image.py --desired_norm_l_inf 0.27 --attck_type gcr_cos_simp2 --which_gpu 1 --diffae_checkpoint ../diffae/checkpoints --ffhq_images_directory ../diffae/imgs_align_uni_ad --chosen_space_ind 14
 
@@ -58,6 +54,8 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from conditioning import get_layer_pert_recon
 
+import torch.autograd.function
+print(torch.autograd.function.__file__)
 
 #seeding code begins
 import torch
@@ -110,7 +108,7 @@ print("diffae_checkpoint", diffae_checkpoint)
 #state = torch.load(f'../diffae/checkpoints/{conf.name}/last.ckpt', map_location='cpu')
 state = torch.load(f"{diffae_checkpoint}/{conf.name}/last.ckpt", map_location='cpu')
 model.load_state_dict(state['state_dict'], strict=False)
-model.ema_model.eval()
+#model.ema_model.eval()
 model.ema_model.to(device);
 
 
@@ -588,13 +586,15 @@ def get_combined_cosine_loss_gcr_simp2(normal_x, source_x):
     retained_outputs = []
 
     # Input blocks
+
     for i, block in enumerate(model.ema_model.encoder.input_blocks):
+        
         source_x = block(source_x)
         normal_x = block(normal_x)
 
         normal_x.retain_grad()
         retained_outputs.append(normal_x)
-
+        #retained_outputs.append(source_x)
 
     for i, block in enumerate(model.ema_model.encoder.middle_block):
         source_x = block(source_x)
@@ -602,6 +602,7 @@ def get_combined_cosine_loss_gcr_simp2(normal_x, source_x):
 
         normal_x.retain_grad()
         retained_outputs.append(normal_x)
+        #retained_outputs.append(source_x)
 
     for i, block in enumerate(model.ema_model.encoder.out):
         source_x = block(source_x)
@@ -609,6 +610,7 @@ def get_combined_cosine_loss_gcr_simp2(normal_x, source_x):
 
         normal_x.retain_grad()
         retained_outputs.append(normal_x)
+        #retained_outputs.append(source_x)
 
     final_loss = -1 * ((F.cosine_similarity(source_x, normal_x, dim=1) - 1) ** 2).mean()
 
@@ -1057,20 +1059,34 @@ if(attck_type == "gcr_cos_simp2"):
         loss_ali = []
         layer_step_loss = []
         for source_im in big_tensor:
+            print("noise_addition.shape", noise_addition.shape)
+            print("source_im.shape", source_im.shape)
             normalized_attacked = (source_im + (noise_addition * (desired_norm_l_inf / (torch.norm(noise_addition, p=float('inf')))) ))
             normalized_attacked = ( source_im.max() - source_im.min() ) * ((normalized_attacked-normalized_attacked.min())/(normalized_attacked.max()-normalized_attacked.min()))  + source_im.min() 
             final_loss, retained_outputs = get_combined_cosine_loss_gcr_simp2(normalized_attacked, source_im)
 
             final_loss.backward()
+            print("noise_addition.grad.shape", noise_addition.grad.shape)
+            for i, block in enumerate(model.ema_model.encoder.input_blocks):
+
+                for name, param in block.named_parameters():
+                    print("name", name)
+                    print("param.shape", param.shape)
+                    print("param.grad", param.grad)
+
             optimizer.step()
             optimizer.zero_grad()
 
-
+            layer_ind = 0
             for nx in retained_outputs:
-                print(f"Gradient for layer : {nx.grad.shape} - mean grad: {nx.grad.abs().mean().item():.6f}")
+                print(f"Gradient for layer :{layer_ind}, of shape {nx.grad.shape} - mean grad: {nx.grad.abs().mean().item():.6f}")
                 print("l2 norm : ", torch.norm(nx, 2))
                 print("retained output shape : ", nx.shape)
                 print()
+                layer_ind +=1
+            
+        break
+    
         print("step", step)
         if(step%50==0 and not step==0):
             with torch.no_grad():
@@ -1081,9 +1097,6 @@ if(attck_type == "gcr_cos_simp2"):
                 l2_distortion = torch.norm(scaled_noise, p=2)
                 deviation = torch.norm(adv_gen - source_im, p=2)
                 get_em = run_time_plots_and_saves(step, total_loss, l2_distortion, l_inf_distortion, deviation, normalized_attacked, scaled_noise, adv_gen)
-
-
-
 
 
 
