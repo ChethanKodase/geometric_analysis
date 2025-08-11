@@ -8,7 +8,7 @@
 
 cd geometric_analysis
 conda activate dt2
-python diffae/loss_grads_wrt_intermediate_maps.py --desired_norm_l_inf 0.27 --attck_type gcr_cos_simp2 --which_gpu 1 --diffae_checkpoint ../diffae/checkpoints --ffhq_images_directory ../diffae/imgs_align_uni_ad --chosen_space_ind 14
+python diffae/loss_grads_wrt_intermediate_maps.py --desired_norm_l_inf 0.27 --which_gpu 1 --diffae_checkpoint ../diffae/checkpoints --ffhq_images_directory ../diffae/imgs_align_uni_ad --chosen_space_ind 14
 
 '''
 
@@ -112,11 +112,7 @@ source_im = data[0]['img'][None].to(device)
 
 import matplotlib.pyplot as plt
 import os
-# Construct the file path
-#file_path = f"diffae/noise_storage/DiffAE_attack_type{attck_type}_norm_bound_{desired_norm_l_inf}_.pt"
 
-source_segment = 0
-file_path = f"/data1/chethan/diffae/attack_run_time_univ/attack_noise/DiffAE_attack_typelatent_cosine_norm_bound_"+str(desired_norm_l_inf)+"_segment_"+str(source_segment)+".pt"
 
 
 
